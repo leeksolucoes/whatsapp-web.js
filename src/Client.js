@@ -1035,6 +1035,24 @@ class Client extends EventEmitter {
             );
         }
 
+        internalOptions.isChunk = false;
+        if (internalOptions.media?.filesize > 50000000) {
+            const base64Data = internalOptions.media.data;
+            const chunkSize = 64 * 1024; // 64KB, ajusta se precisar
+            const totalChunks = Math.ceil(base64Data.length / chunkSize);
+            internalOptions.isChunk = true;
+
+            for (let i = 0; i < totalChunks; i++) {
+                const chunk = base64Data.slice(i * chunkSize, (i + 1) * chunkSize);
+                await this.pupPage.evaluate((chunk, index, total) => {
+                    window._base64Chunks = window._base64Chunks || [];
+                    window._base64Chunks[index] = chunk;
+                }, chunk, i, totalChunks);
+            }
+
+            internalOptions.media.data = '';
+        }
+        
         const sentMsg = await this.pupPage.evaluate(async (chatId, content, options, sendSeen) => {
             const chat = await window.WWebJS.getChat(chatId, { getAsModel: false });
 
@@ -1042,6 +1060,12 @@ class Client extends EventEmitter {
 
             if (sendSeen) {
                 await window.WWebJS.sendSeen(chatId);
+            }
+            if(options.isChunk){
+                const fullBase64 = window._base64Chunks.join("");
+                window._finalFile = fullBase64; 
+                window._base64Chunks = []; 
+                options.media.data = fullBase64;
             }
 
             const msg = await window.WWebJS.sendMessage(chat, content, options);
