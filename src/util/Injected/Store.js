@@ -231,3 +231,4 @@ exports.ExposeStore = () => {
 
     window.injectToFunction({ module: 'WAWebLid1X1MigrationGating', function: 'Lid1X1MigrationUtils.isLidMigrated' }, () => false);
 };
+
