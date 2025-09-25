@@ -78,25 +78,35 @@ class MessageMedia {
             const size = response.headers.get('Content-Length');
 
             const contentDisposition = response.headers.get('Content-Disposition');
-            const name = contentDisposition ? contentDisposition.match(/((?<=filename=")(.*)(?="))/) : null;
-
+            const name = contentDisposition ? contentDisposition.match(/((?<=filename=")(.*)(?="))/) : null
+            
             let data = '';
-            if (response.buffer) {
-                data = (await response.buffer()).toString('base64');
-            } else {
-                const bArray = new Uint8Array(await response.arrayBuffer());
-                bArray.forEach((b) => {
-                    data += String.fromCharCode(b);
-                });
-                data = btoa(data);
+            //Acima de 150mb utilize buffer ao inves de b64
+            if(Number(size) > 150 * 1024 * 1024)
+            {
+                if (response.buffer) {
+                    data = (await response.buffer());
+                } else {
+                    const bArray = new Uint8Array(await response.arrayBuffer());
+                    data = bArray;
+                }
+            }
+            else {
+                if (response.buffer) {
+                    data = (await response.buffer()).toString('base64');
+                } else {
+                    const bArray = new Uint8Array(await response.arrayBuffer());
+                    bArray.forEach((b) => {
+                        data += String.fromCharCode(b);
+                    });
+                    data = btoa(data);
+                }
             }
             
             return { data, mime, name, size };
         }
 
-        const res = options.client
-            ? (await options.client.pupPage.evaluate(fetchData, url, options.reqOptions))
-            : (await fetchData(url, options.reqOptions));
+        const res = (await fetchData(url, options.reqOptions));
 
         const filename = options.filename ||
             (res.name ? res.name[0] : (pUrl.pathname.split('/').pop() || 'file'));

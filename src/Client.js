@@ -3,6 +3,9 @@
 const EventEmitter = require('events');
 const puppeteer = require('puppeteer');
 const moduleRaid = require('@pedroslopez/moduleraid/moduleraid');
+const fs = require("fs");
+const path = require("path");
+const os = require("os");
 
 const Util = require('./util/Util');
 const InterfaceController = require('./util/InterfaceController');
@@ -937,7 +940,45 @@ class Client extends EventEmitter {
      * @property {MessageMedia} [media] - Media to be sent
      * @property {any} [extra] - Extra options
      */
+
+
+    async saveTempFile(buffer, filename = "upload.tmp") {
+        const tempDir = os.tmpdir();
+        const filePath = path.join(tempDir, filename);
+        await fs.promises.writeFile(filePath, buffer);
+        return filePath;
+    }
+
+    async injectFileToBrowser(page, buffer, filename = "upload.tmp") {
+        const filePath = await this.saveTempFile(buffer, filename);
+
+        await page.evaluate(() => {
+            let input = document.getElementById("pupp-file-inject");
+            if (!input) {
+            input = document.createElement("input");
+            input.type = "file";
+            input.id = "pupp-file-inject";
+            input.style.display = "none";
+            document.body.appendChild(input);
+            }
+        });
+
+        const fileInput = await page.$("#pupp-file-inject");
+        if (!fileInput) throw new Error('Não encontrou o input injetado');
+        await fileInput.uploadFile(filePath);
+        //remove da memoria o arquivo
+        await fs.promises.unlink(filePath).catch(() => {})
+    }
+
     
+    /**
+     * Send a message to a specific chatId
+     * @param {string} chatId
+     * @param {string|MessageMedia|Location|Poll|Contact|Array<Contact>|Buttons|List} content
+     * @param {MessageSendOptions} [options] - Options used when sending the message
+     * 
+     * @returns {Promise<Message>} Message that was just sent
+     */
     /**
      * Send a message to a specific chatId
      * @param {string} chatId
@@ -1035,13 +1076,53 @@ class Client extends EventEmitter {
             );
         }
 
+        if(internalOptions?.media){
+            if(Buffer.isBuffer(internalOptions.media.data)){
+                await this.injectFileToBrowser(this.pupPage, internalOptions.media.data, internalOptions.media.filename);
+            }
+            else {
+                //até 150mb trabalha com chunks
+                const mediaChunkThreshold =  150 * 1024 * 1024; 
+                if (internalOptions.media?.filesize <= mediaChunkThreshold) {
+                    const base64Data = internalOptions.media.data;
+                    const chunkSize = 100 * 1024; // 64KB, ajusta se precisar
+                    const totalChunks = Math.ceil(base64Data.length / chunkSize);
+
+        
+                    for (let i = 0; i < totalChunks; i++) {
+                        const chunk = base64Data.slice(i * chunkSize, (i + 1) * chunkSize);
+                        await this.pupPage.evaluate((chunk, index, total) => {
+                            window._base64Chunks = window._base64Chunks || [];
+                            window._base64Chunks[index] = chunk;
+                        }, chunk, i, totalChunks);
+                    }
+        
+                }
+            }
+            delete internalOptions.media.data
+        }
+
         const sentMsg = await this.pupPage.evaluate(async (chatId, content, options, sendSeen) => {
             const chat = await window.WWebJS.getChat(chatId, { getAsModel: false });
-
             if (!chat) return null;
 
             if (sendSeen) {
                 await window.WWebJS.sendSeen(chatId);
+            }
+            if(!!options.media){
+                if(window?._base64Chunks?.length > 0){
+                    const fullBase64 = window._base64Chunks.join("");
+                    window._base64Chunks = []; 
+                    options.media.data = fullBase64;
+                }
+                else {
+                    const input = document.getElementById("pupp-file-inject");
+                    if(!input) return;
+                    const file = input.files?.[0];
+                    if(file){
+                        options.media.data = file;
+                    }
+                }    
             }
 
             const msg = await window.WWebJS.sendMessage(chat, content, options);
@@ -2343,17 +2424,19 @@ class Client extends EventEmitter {
      * @returns {Promise<Array<{ lid: string, pn: string }>>}
      */
     async getContactLidAndPhone(userIds) {
-        return await this.pupPage.evaluate(async (userIds) => {
-            if (!Array.isArray(userIds)) userIds = [userIds];
-
-            return await Promise.all(userIds.map(async (userId) => {
-                const { lid, phone } = await window.WWebJS.enforceLidAndPnRetrieval(userId);
+        return await this.pupPage.evaluate((userIds) => {
+            !Array.isArray(userIds) && (userIds = [userIds]);
+            return userIds.map(userId => {
+                const wid = window.Store.WidFactory.createWid(userId);
+                const isLid = wid.server === 'lid';
+                const lid = isLid ? wid : window.Store.LidUtils.getCurrentLid(wid);
+                const phone = isLid ? window.Store.LidUtils.getPhoneNumber(wid) : wid;
 
                 return {
-                    lid: lid?._serialized,
-                    pn: phone?._serialized
+                    lid: lid._serialized,
+                    pn: phone._serialized
                 };
-            }));
+            });
         }, userIds);
     }
 }

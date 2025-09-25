@@ -421,7 +421,7 @@ exports.LoadUtils = () => {
     };
 
     window.WWebJS.processMediaData = async (mediaInfo, { forceSticker, forceGif, forceVoice, forceDocument, forceMediaHd, sendToChannel }) => {
-        const file = window.WWebJS.mediaInfoToFile(mediaInfo);
+        const file = mediaInfo.data instanceof File ? mediaInfo.data : window.WWebJS.mediaInfoToFile(mediaInfo);
         const opaqueData = await window.Store.OpaqueData.createFromData(file, file.type);
         const mediaParams = {
             asSticker: forceSticker,
