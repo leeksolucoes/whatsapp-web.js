@@ -195,9 +195,6 @@ class Client extends EventEmitter {
                 // refresh qr code
                 window.Store.Cmd.refreshQR();
             }
-            if (state == 'UNPAIRED' || state == 'UNPAIRED_IDLE') {
-                this.emit(Events.STATE_CHANGED, state);
-            }
         });
 
         await exposeFunctionIfAbsent(this.pupPage, 'onAppStateHasSyncedEvent', async () => {
@@ -1364,7 +1361,8 @@ class Client extends EventEmitter {
      */
     async getState() {
         return await this.pupPage.evaluate(() => {
-            if(!window.Store) return null;
+            if(!window.Store && !window.AuthStore) return null;
+            if (!window.Store) return window.AuthStore.AppState.state;
             return window.Store.AppState.state;
         });
     }
