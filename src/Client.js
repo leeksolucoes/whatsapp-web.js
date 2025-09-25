@@ -195,6 +195,9 @@ class Client extends EventEmitter {
                 // refresh qr code
                 window.Store.Cmd.refreshQR();
             }
+            if (state == 'UNPAIRED' || state == 'UNPAIRED_IDLE') {
+                this.emit(Events.STATE_CHANGED, state);
+            }
         });
 
         await exposeFunctionIfAbsent(this.pupPage, 'onAppStateHasSyncedEvent', async () => {
