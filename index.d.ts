@@ -166,6 +166,11 @@ declare namespace WAWebJS {
          */
         requestPairingCode(phoneNumber: string, showNotification?: boolean, intervalMs?: number): Promise<string>
 
+        /**
+         * Generate QR code and emit event
+         */
+        generateQRcode(): Promise<void>
+
         /** Force reset of connection state for the client */
         resetState(): Promise<void>
 
