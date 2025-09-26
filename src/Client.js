@@ -389,6 +389,24 @@ class Client extends EventEmitter {
     }
 
     /**
+     * Generate QR code and emit event
+     */
+    async generateQRcode() {
+        await this.pupPage.evaluate(async () => {
+            if (window.AuthStore.AppState.state !== 'UNPAIRED') return;
+            const registrationInfo = await window.AuthStore.RegistrationUtils.waSignalStore.getRegistrationInfo();
+            const noiseKeyPair = await window.AuthStore.RegistrationUtils.waNoiseInfo.get();
+            const staticKeyB64 = window.AuthStore.Base64Tools.encodeB64(noiseKeyPair.staticKeyPair.pubKey);
+            const identityKeyB64 = window.AuthStore.Base64Tools.encodeB64(registrationInfo.identityKeyPair.pubKey);
+            const advSecretKey = await window.AuthStore.RegistrationUtils.getADVSecretKey();
+            const platform = window.AuthStore.RegistrationUtils.DEVICE_PLATFORM;
+            const getQR = (ref) => ref + ',' + staticKeyB64 + ',' + identityKeyB64 + ',' + advSecretKey + ',' + platform;
+
+            window.onQRChangedEvent(getQR(window.AuthStore.Conn.ref));
+        });
+    }
+
+    /**
      * Attach event listeners to WA Web
      * Private function
      * @property {boolean} reinject is this a reinject?
