@@ -2,7 +2,6 @@
 
 const EventEmitter = require('events');
 const puppeteer = require('puppeteer');
-const moduleRaid = require('@pedroslopez/moduleraid/moduleraid');
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
